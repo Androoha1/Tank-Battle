@@ -54,8 +54,6 @@ pip install -r requirements.txt
 
 ```bash
 python main.py        # 2 players (default)
-python main.py 3      # 3 players
-python main.py 4      # 4 players
 ```
 
 ---
@@ -66,5 +64,3 @@ python main.py 4      # 4 players
 |--------|------|-------|
 | Player 1 | `W` `A` `S` `D` | `Left Shift` |
 | Player 2 | Arrow keys | `Enter` |
-| Player 3 | `I` `J` `K` `L` | `U` |
-| Player 4 | Numpad `8` `4` `5` `6` | Numpad `0` |
