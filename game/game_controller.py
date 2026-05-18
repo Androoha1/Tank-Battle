@@ -18,7 +18,6 @@ from .controllers.player_controller import PlayerController
 from .controllers.powerup_controller import PowerupController
 from .entities.particle import Particle
 from .events import GameEvent, GameEventObservable
-from .menu import Menu
 from .rendering.renderer import Renderer
 from .states.base import GameState
 from .states.match_over_state import MatchOverState
@@ -48,7 +47,6 @@ class GameController:
         self._layout = LayoutController(self._events)
         self._players_ctrl = PlayerController(2, self._events)
         self._powerup_ctrl = PowerupController(self._events)
-        self._menu = Menu(self._layout)
 
         self._win_target = 0
         self._match_winner = None
@@ -64,7 +62,7 @@ class GameController:
         self._setup_subscriptions()
 
         _states: dict[str, GameState] = {
-            "menu": MenuState(self, self._menu, self._renderer),
+            "menu": MenuState(self, self._renderer),
             "playing": PlayingState(self, self._renderer),
             "paused": PausedState(self, self._renderer),
             "round_end": RoundEndState(self, self._renderer),
