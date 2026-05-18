@@ -1,8 +1,8 @@
-"""Pinball — your bullets bounce many more times."""
-from .powerup import PowerUp
+"""Pinball effect — your bullets bounce many more times."""
+from .effect import PlayerEffect
 
 
-class Pinball(PowerUp):
+class PinballEffect(PlayerEffect):
     NAME = "Pinball"
     COLOR = (255, 100, 220)
     ICON = "K"

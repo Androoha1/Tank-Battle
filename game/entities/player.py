@@ -67,7 +67,7 @@ class Player(Entity):
 
     # --- effect plumbing --------------------------------------------------
     def add_effect(self, effect) -> None:
-        """Add an effect, replacing any other instance of the same class."""
+        """Add a PlayerEffect, replacing any other instance of the same class."""
         self._effects = [e for e in self._effects if type(e) is not type(effect)]
         self._effects.append(effect)
 

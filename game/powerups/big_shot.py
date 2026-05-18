@@ -1,8 +1,8 @@
-"""Big Shot weapon — a single large, slow projectile."""
-from .powerup import PowerUp
+"""Big Shot weapon effect — a single large, slow projectile."""
+from .effect import PlayerEffect
 
 
-class BigShot(PowerUp):
+class BigShotEffect(PlayerEffect):
     NAME = "Big Shot"
     COLOR = (255, 110, 110)
     ICON = "B"

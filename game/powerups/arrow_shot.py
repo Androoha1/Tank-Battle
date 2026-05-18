@@ -1,8 +1,8 @@
-from .powerup import PowerUp
+from .effect import PlayerEffect
 
 
-class ArrowShot(PowerUp):
-    """Weapon power-up: fires three bullets in an arrow spread."""
+class ArrowShotEffect(PlayerEffect):
+    """Weapon effect: fires three bullets in an arrow spread."""
     NAME = "Arrow Shot"
     COLOR = (180, 120, 255)
     ICON = "A"

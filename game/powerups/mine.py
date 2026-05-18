@@ -1,8 +1,8 @@
-"""Mine weapon — pressing 'shoot' drops a proximity mine."""
-from .powerup import PowerUp
+"""Mine weapon effect — pressing 'shoot' drops a proximity mine."""
+from .effect import PlayerEffect
 
 
-class MinePower(PowerUp):
+class MinePowerEffect(PlayerEffect):
     NAME = "Mine"
     COLOR = (200, 80, 80)
     ICON = "M"

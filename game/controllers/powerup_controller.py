@@ -3,32 +3,33 @@ import random
 import pygame as pg
 
 from ..events import GameEvent
-from ..powerups.arrow_shot import ArrowShot
-from ..powerups.backshot import Backshot
-from ..powerups.big_shot import BigShot
-from ..powerups.drunk import Drunk
-from ..powerups.fire_rate import FireRate
-from ..powerups.freeze import Freeze
-from ..powerups.ghost import Ghost
-from ..powerups.giant import Giant
-from ..powerups.mine import MinePower
-from ..powerups.pinball import Pinball
-from ..powerups.rapid_shot import RapidShot
-from ..powerups.shield import Shield
-from ..powerups.shotgun import Shotgun
-from ..powerups.speed import Speed
-from ..powerups.spinner import Spinner
-from ..powerups.teleport import Teleport
-from ..powerups.tiny import Tiny
+from ..powerups.arrow_shot import ArrowShotEffect
+from ..powerups.backshot import BackshotEffect
+from ..powerups.big_shot import BigShotEffect
+from ..powerups.drunk import DrunkEffect
+from ..powerups.fire_rate import FireRateEffect
+from ..powerups.freeze import FreezeEffect
+from ..powerups.ghost import GhostEffect
+from ..powerups.giant import GiantEffect
+from ..powerups.mine import MinePowerEffect
+from ..powerups.pinball import PinballEffect
+from ..powerups.rapid_shot import RapidShotEffect
+from ..powerups.shield import ShieldEffect
+from ..powerups.shotgun import ShotgunEffect
+from ..powerups.speed import SpeedEffect
+from ..powerups.spinner import SpinnerEffect
+from ..powerups.teleport import TeleportEffect
+from ..powerups.tiny import TinyEffect
+from ..powerups.pickup import PowerUpPickup
 from .. import config
 
 
 class PowerupController:
-    POWERUP_CLASSES: list[type] = [
-        Speed, FireRate, RapidShot, ArrowShot,
-        Shield, BigShot, MinePower, Freeze,
-        Tiny, Ghost, Teleport, Drunk,
-        Giant, Spinner, Backshot, Pinball, Shotgun,
+    POWERUP_CATALOG: list[type] = [
+        SpeedEffect, FireRateEffect, RapidShotEffect, ArrowShotEffect,
+        ShieldEffect, BigShotEffect, MinePowerEffect, FreezeEffect,
+        TinyEffect, GhostEffect, TeleportEffect, DrunkEffect,
+        GiantEffect, SpinnerEffect, BackshotEffect, PinballEffect, ShotgunEffect,
     ]
 
     def __init__(self, events) -> None:
@@ -68,7 +69,7 @@ class PowerupController:
                     pu.apply(player, ctx)
                     self._events.publish(
                         GameEvent.POWERUP_PICKED,
-                        {"player": player, "kind": type(pu).__name__},
+                        {"player": player, "kind": pu.name},
                     )
                     self._powerups.remove(pu)
                     break
@@ -86,5 +87,5 @@ class PowerupController:
         spot = layout.get_powerup_spot(map_data, occupied)
         if spot is None:
             return
-        cls = random.choice(self.POWERUP_CLASSES)
-        self._powerups.append(cls(spot[0], spot[1]))
+        cls = random.choice(self.POWERUP_CATALOG)
+        self._powerups.append(PowerUpPickup(spot[0], spot[1], cls))

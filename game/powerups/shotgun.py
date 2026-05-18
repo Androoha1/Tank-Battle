@@ -1,8 +1,8 @@
-"""Shotgun — each shot fires 5 bullets in a wide spread."""
-from .powerup import PowerUp
+"""Shotgun effect — each shot fires 5 bullets in a wide spread."""
+from .effect import PlayerEffect
 
 
-class Shotgun(PowerUp):
+class ShotgunEffect(PlayerEffect):
     NAME = "Shotgun"
     COLOR = (240, 120, 60)
     ICON = "W"

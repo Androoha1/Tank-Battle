@@ -1,19 +1,17 @@
-"""Drunk — debuff applied to OTHER players: left/right steering is swapped."""
-from .powerup import PowerUp
+"""Drunk effect — debuff applied to OTHER players: left/right steering is swapped."""
+from .effect import PlayerEffect
 
 
-class Drunk(PowerUp):
+class DrunkEffect(PlayerEffect):
     NAME = "Drunk"
     COLOR = (255, 160, 80)
     ICON = "X"
     DURATION_MS = 4500
     swaps_steering = True
 
-    def apply(self, player, ctx) -> None:
-        # Applies to OTHER living players — the picker stays sober.
+    @classmethod
+    def dispatch(cls, picker, ctx) -> None:
         for other in ctx.players:
-            if other is player or not other.alive():
+            if other is picker or not other.alive():
                 continue
-            effect = self.__class__(0, 0)
-            effect.activate()
-            other.add_effect(effect)
+            other.add_effect(cls())

@@ -1,25 +1,23 @@
-"""Freeze power-up — slows all OTHER players for a short window.
+"""Freeze effect — slows all OTHER players for a short window.
 
 This is the only power-up whose effect is a *debuff*: when picked up, the
-instance is attached to every other living player rather than to the picker.
+effect is attached to every other living player rather than to the picker.
 """
-from .powerup import PowerUp
+from .effect import PlayerEffect
 
 
-class Freeze(PowerUp):
+class FreezeEffect(PlayerEffect):
     NAME = "Freeze"
     COLOR = (130, 200, 255)
     ICON = "Z"
     DURATION_MS = 3500
 
-    def apply(self, player, ctx) -> None:
-        # Apply to OTHER players instead of the picker.
+    @classmethod
+    def dispatch(cls, picker, ctx) -> None:
         for other in ctx.players:
-            if other is player or not other.alive():
+            if other is picker or not other.alive():
                 continue
-            effect = self.__class__(0, 0)
-            effect.activate()
-            other.add_effect(effect)
+            other.add_effect(cls())
 
     def modify_speed(self, base: float) -> float:
         return base * 0.4

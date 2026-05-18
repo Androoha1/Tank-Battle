@@ -1,8 +1,8 @@
-"""Backshot — bullets come out of the BACK of the tank."""
-from .powerup import PowerUp
+"""Backshot effect — bullets come out of the BACK of the tank."""
+from .effect import PlayerEffect
 
 
-class Backshot(PowerUp):
+class BackshotEffect(PlayerEffect):
     NAME = "Backshot"
     COLOR = (255, 220, 120)
     ICON = "U"

@@ -1,7 +1,7 @@
-from .powerup import PowerUp
+from .effect import PlayerEffect
 
 
-class Speed(PowerUp):
+class SpeedEffect(PlayerEffect):
     NAME = "Speed"
     COLOR = (110, 220, 255)
     ICON = "S"

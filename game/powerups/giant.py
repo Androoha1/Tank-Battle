@@ -1,16 +1,16 @@
-"""Giant — bigger, slower tank that can soak one hit."""
-from .powerup import PowerUp
+"""Giant effect — bigger, slower tank that can soak one hit."""
+from .effect import PlayerEffect
 
 
-class Giant(PowerUp):
+class GiantEffect(PlayerEffect):
     NAME = "Giant"
     COLOR = (255, 150, 80)
     ICON = "H"
     DURATION_MS = 9000
     absorbs_hit = True
 
-    def __init__(self, x: float, y: float) -> None:
-        super().__init__(x, y)
+    def __init__(self) -> None:
+        super().__init__()
         self._charges = 1
 
     def modify_size(self, base: int) -> int:
@@ -22,6 +22,6 @@ class Giant(PowerUp):
     def try_consume_hit(self) -> bool:
         if self._charges > 0:
             self._charges -= 1
-            self._active_elapsed = self.DURATION_MS  # expire after the hit
+            self._active_elapsed = self.DURATION_MS
             return True
         return False

@@ -1,8 +1,8 @@
-from .powerup import PowerUp
+from .effect import PlayerEffect
 
 
-class RapidShot(PowerUp):
-    """Weapon power-up: dramatically reduced cooldown for a short burst."""
+class RapidShotEffect(PlayerEffect):
+    """Weapon effect: dramatically reduced cooldown for a short burst."""
     NAME = "Rapid Shot"
     COLOR = (255, 90, 160)
     ICON = "R"

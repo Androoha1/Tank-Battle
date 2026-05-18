@@ -1,8 +1,8 @@
-"""Tiny — shrinks the tank, making it harder to hit and a little nippier."""
-from .powerup import PowerUp
+"""Tiny effect — shrinks the tank, making it harder to hit and a little nippier."""
+from .effect import PlayerEffect
 
 
-class Tiny(PowerUp):
+class TinyEffect(PlayerEffect):
     NAME = "Tiny"
     COLOR = (170, 240, 180)
     ICON = "T"

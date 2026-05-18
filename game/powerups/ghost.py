@@ -1,8 +1,8 @@
-"""Ghost — phase through walls; tank renders semi-transparent."""
-from .powerup import PowerUp
+"""Ghost effect — phase through walls; tank renders semi-transparent."""
+from .effect import PlayerEffect
 
 
-class Ghost(PowerUp):
+class GhostEffect(PlayerEffect):
     NAME = "Ghost"
     COLOR = (210, 220, 255)
     ICON = "G"

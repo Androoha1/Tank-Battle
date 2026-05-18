@@ -1,7 +1,7 @@
-from .powerup import PowerUp
+from .effect import PlayerEffect
 
 
-class FireRate(PowerUp):
+class FireRateEffect(PlayerEffect):
     NAME = "Fire Rate"
     COLOR = (255, 180, 90)
     ICON = "F"
