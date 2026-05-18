@@ -18,6 +18,7 @@ from .controllers.player_controller import PlayerController
 from .controllers.powerup_controller import PowerupController
 from .entities.particle import Particle
 from .events import GameEvent, GameEventObservable
+from .match import Match
 from .rendering.renderer import Renderer
 from .states.base import GameState
 from .states.match_over_state import MatchOverState
@@ -48,10 +49,7 @@ class GameController:
         self._players_ctrl = PlayerController(2, self._events)
         self._powerup_ctrl = PowerupController(self._events)
 
-        self._win_target = 0
-        self._match_winner = None
-        self._winner = None
-        self._round_num = 0
+        self._match: Match | None = None
         self._map_data: dict | None = None
 
         self._world = World()
@@ -121,11 +119,15 @@ class GameController:
     # ============================================================== properties
     @property
     def winner(self):
-        return self._winner
+        return self._match.round_winner if self._match else None
 
     @property
     def match_winner(self):
-        return self._match_winner
+        return self._match.match_winner if self._match else None
+
+    @property
+    def match(self) -> "Match | None":
+        return self._match
 
     # ========================================================== subscriptions
     def _setup_subscriptions(self) -> None:
@@ -150,16 +152,14 @@ class GameController:
 
     # ================================================================== flow
     def begin_match(self, win_target: int) -> None:
-        self._win_target = win_target
-        self._match_winner = None
+        self._match = Match(win_target)
         self._players_ctrl = PlayerController(2, self._events)
-        self._round_num = 0
         self.start_round()
 
     def start_round(self) -> None:
-        if self._round_num == 0:
+        if self._match.round_num == 0:
             self._audio.start_ambient()
-        self._round_num += 1
+        self._match.start_round()
         self._world.clear()
         self._camera.reset()
         self._map_data = self._layout.select_map()
@@ -168,15 +168,13 @@ class GameController:
         spawns = self._layout.get_spawns(self._map_data, 2)
         if not self._players_ctrl.players:
             self._players_ctrl.spawn(spawns)
+            self._match.register_players(self._players_ctrl.players)
         else:
             self._players_ctrl.reset_for_new_round(spawns)
         self._powerup_ctrl.set_layout(self._layout, self._map_data)
-        self._winner = None
 
     def return_to_menu(self) -> None:
-        self._round_num = 0
-        self._match_winner = None
-        self._winner = None
+        self._match = None
         self._players_ctrl = PlayerController(2, self._events)
         self._world.clear()
         self._world.set_walls([])
@@ -224,14 +222,9 @@ class GameController:
     def _check_winner(self) -> bool:
         alive = self._players_ctrl.alive_players()
         if len(alive) <= 1 and len(self._players_ctrl.players) >= 2:
-            self._winner = alive[0] if alive else None
-            if self._winner:
-                self._players_ctrl.award_winner(self._winner)
-                if self._win_target > 0:
-                    score = self._players_ctrl.scores.get(self._winner, 0)
-                    if score >= self._win_target:
-                        self._match_winner = self._winner
-            self._events.publish(GameEvent.ROUND_RESET, {"winner": self._winner})
+            winner = alive[0] if alive else None
+            self._match.award_round_winner(winner)
+            self._events.publish(GameEvent.ROUND_RESET, {"winner": winner})
             return True
         return False
 
@@ -244,7 +237,8 @@ class GameController:
             self._powerup_ctrl,
             self._players_ctrl,
             self._map_data,
-            self._round_num,
+            self._match.round_num if self._match else 0,
+            self._match,
         )
 
     # =============================================================== main loop

@@ -42,7 +42,7 @@ class MatchOverState(GameState):
         y = rect.bottom + 30
         for p in players_ctrl.players:
             s = self._renderer.sub_font.render(
-                f"{p.name}: {players_ctrl.scores.get(p, 0)}", True, p.colors["accent"]
+                f"{p.name}: {self._gc.match.score_of(p)}", True, p.colors["accent"]
             )
             screen.blit(s, s.get_rect(center=(config.WIDTH // 2, y)))
             y += 36

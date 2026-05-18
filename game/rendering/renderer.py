@@ -82,6 +82,7 @@ class Renderer:
         players_ctrl,
         map_data: dict | None,
         round_num: int,
+        match,
     ) -> None:
         ws = self._world_surf
         ws.blit(self._bg, (0, 0))
@@ -111,7 +112,7 @@ class Renderer:
             overlay.fill((*camera.flash_color, camera.flash_alpha))
             screen.blit(overlay, (0, 0))
 
-        players_ctrl.draw_hud(screen)
+        players_ctrl.draw_hud(screen, match)
 
         if map_data:
             info = self._tiny_font.render(
