@@ -1,8 +1,14 @@
-"""Top-level coordinator: owns entity collections and drives the main loop.
+"""Top-level coordinator: wires components together and drives the main loop.
 
 Local 2-player hot-seat only.
+
+Public entry point is unchanged: ``GameController().run()``.
+
+Entity classes (Player, Shot, Mine, …) call back into this object as *ctx*
+using the methods/properties below (add_shot, walls, request_shake, …).
+Those methods simply delegate to the appropriate component so entity code
+requires no changes.
 """
-import math
 import random
 import pygame as pg
 
@@ -13,22 +19,24 @@ from .controllers.powerup_controller import PowerupController
 from .entities.particle import Particle
 from .events import GameEvent, GameEventObservable
 from .menu import Menu
+from .rendering.renderer import Renderer
+from .states.base import GameState
+from .states.match_over_state import MatchOverState
+from .states.menu_state import MenuState
+from .states.paused_state import PausedState
+from .states.playing_state import PlayingState
+from .states.round_end_state import RoundEndState
+from .systems.camera_effects import CameraEffects
+from .systems.collision_system import CollisionSystem
+from .systems.world import World
 from . import config
 
 
 class GameController:
-    STATE_MENU = "menu"
-    STATE_PLAYING = "playing"
-    STATE_PAUSED = "paused"
-    STATE_ROUND_END = "round_end"
-    STATE_MATCH_OVER = "match_over"
-
     def __init__(self) -> None:
         pg.init()
         pg.display.set_caption("Tankons — Tank Battle")
         self._audio = SoundLibrary()
-        # Fullscreen with SDL's SCALED renderer — keeps the logical 1280x720
-        # internal resolution and stretches to the display, with smooth filtering.
         self._screen = pg.display.set_mode(
             (config.WIDTH, config.HEIGHT),
             pg.FULLSCREEN | pg.SCALED,
@@ -44,63 +52,61 @@ class GameController:
 
         self._win_target = 0
         self._match_winner = None
-        self._pause_pulse = 0.0
-
-        self._shots: list = []
-        self._mines: list = []
-        self._particles: list = []
-        self._debris: list = []
-        self._shockwaves: list = []
-        self._walls: list = []
-        self._map_data: dict | None = None
-        self._state = self.STATE_MENU
-        self._round_end_timer = 0.0
         self._winner = None
         self._round_num = 0
+        self._map_data: dict | None = None
 
-        # Camera shake + screen flash.
-        self._shake_intensity = 0.0
-        self._shake_timer = 0.0
-        self._shake_duration = 0.0
-        self._flash_color: tuple[int, int, int] | None = None
-        self._flash_alpha = 0
-        self._world = pg.Surface((config.WIDTH, config.HEIGHT))
+        self._world = World()
+        self._camera = CameraEffects()
+        self._collision = CollisionSystem()
+        self._renderer = Renderer()
 
-        self._title_font = pg.font.SysFont("arialblack", 110, bold=True)
-        self._sub_font = pg.font.SysFont("arialblack", 30, bold=True)
-        self._mid_font = pg.font.SysFont("arialblack", 24, bold=True)
-        self._tiny_font = pg.font.SysFont("arial", 18, bold=True)
-
-        self._bg = self._build_background()
         self._setup_subscriptions()
 
-    # =============================================================== ctx
+        _states: dict[str, GameState] = {
+            "menu": MenuState(self, self._menu, self._renderer),
+            "playing": PlayingState(self, self._renderer),
+            "paused": PausedState(self, self._renderer),
+            "round_end": RoundEndState(self, self._renderer),
+            "match_over": MatchOverState(self, self._renderer),
+        }
+        self._states = _states
+        self._current_state: GameState = _states["menu"]
+
+    # ================================================================= ctx API
+    # Entity classes call these methods on the GameController as *ctx*.
+    # They delegate to the appropriate component so entity code is untouched.
+
     @property
-    def walls(self):
-        return self._walls
+    def walls(self) -> list:
+        return self._world.walls
 
     @property
     def players(self) -> list:
         return self._players_ctrl.players
 
     @property
+    def players_ctrl(self) -> PlayerController:
+        return self._players_ctrl
+
+    @property
     def audio(self) -> SoundLibrary:
         return self._audio
 
     def add_shot(self, s) -> None:
-        self._shots.append(s)
+        self._world.add_shot(s)
 
     def add_mine(self, m) -> None:
-        self._mines.append(m)
+        self._world.add_mine(m)
 
     def add_particle(self, p) -> None:
-        self._particles.append(p)
+        self._world.add_particle(p)
 
     def add_debris(self, d) -> None:
-        self._debris.append(d)
+        self._world.add_debris(d)
 
     def add_shockwave(self, w) -> None:
-        self._shockwaves.append(w)
+        self._world.add_shockwave(w)
 
     def random_spawn_point(self) -> tuple[float, float, float] | None:
         """Return a random (x, y, angle) spawn for the current map, or None."""
@@ -109,16 +115,21 @@ class GameController:
         return random.choice(self._map_data["spawns"])
 
     def request_shake(self, intensity: float, duration_ms: float) -> None:
-        if intensity > self._shake_intensity or self._shake_timer <= 0:
-            self._shake_intensity = intensity
-            self._shake_timer = duration_ms
-            self._shake_duration = duration_ms
+        self._camera.request_shake(intensity, duration_ms)
 
     def request_flash(self, color: tuple[int, int, int], alpha: int) -> None:
-        self._flash_color = color
-        self._flash_alpha = alpha
+        self._camera.request_flash(color, alpha)
 
-    # ============================================================== init
+    # ============================================================== properties
+    @property
+    def winner(self):
+        return self._winner
+
+    @property
+    def match_winner(self):
+        return self._match_winner
+
+    # ========================================================== subscriptions
     def _setup_subscriptions(self) -> None:
         self._events.subscribe(GameEvent.SHOT_FIRED, self._on_shot_fired)
         self._events.subscribe(GameEvent.TANK_DESTROYED, self._on_tank_destroyed)
@@ -139,30 +150,7 @@ class GameController:
             )
         self._audio.play_pickup()
 
-    def _build_background(self) -> pg.Surface:
-        s = pg.Surface((config.WIDTH, config.HEIGHT))
-        top_c = (24, 28, 42)
-        bot_c = (14, 16, 24)
-        for y in range(config.HEIGHT):
-            t = y / config.HEIGHT
-            r = int(top_c[0] * (1 - t) + bot_c[0] * t)
-            g = int(top_c[1] * (1 - t) + bot_c[1] * t)
-            b = int(top_c[2] * (1 - t) + bot_c[2] * t)
-            pg.draw.line(s, (r, g, b), (0, y), (config.WIDTH, y))
-        for x in range(0, config.WIDTH, 48):
-            pg.draw.line(s, config.GRID, (x, config.HUD_HEIGHT), (x, config.HEIGHT), 1)
-        for y in range(config.HUD_HEIGHT, config.HEIGHT, 48):
-            pg.draw.line(s, config.GRID, (0, y), (config.WIDTH, y), 1)
-        for corner in ((0, config.HUD_HEIGHT), (config.WIDTH, config.HUD_HEIGHT),
-                       (0, config.HEIGHT), (config.WIDTH, config.HEIGHT)):
-            radius = 300
-            shade = pg.Surface((radius * 2, radius * 2), pg.SRCALPHA)
-            pg.draw.circle(shade, (0, 0, 0, 90), (radius, radius), radius)
-            s.blit(shade, (corner[0] - radius, corner[1] - radius),
-                   special_flags=pg.BLEND_PREMULTIPLIED)
-        return s
-
-    # ============================================================== flow
+    # ================================================================== flow
     def begin_match(self, win_target: int) -> None:
         self._win_target = win_target
         self._match_winner = None
@@ -174,16 +162,10 @@ class GameController:
         if self._round_num == 0:
             self._audio.start_ambient()
         self._round_num += 1
-        self._shots = []
-        self._mines = []
-        self._particles = []
-        self._debris = []
-        self._shockwaves = []
-        self._shake_intensity = 0
-        self._shake_timer = 0
-        self._flash_alpha = 0
+        self._world.clear()
+        self._camera.reset()
         self._map_data = self._layout.select_map()
-        self._walls = self._layout.build_walls(self._map_data)
+        self._world.set_walls(self._layout.build_walls(self._map_data))
 
         spawns = self._layout.get_spawns(self._map_data, 2)
         if not self._players_ctrl.players:
@@ -192,13 +174,58 @@ class GameController:
             self._players_ctrl.reset_for_new_round(spawns)
         self._powerup_ctrl.set_layout(self._layout, self._map_data)
         self._winner = None
-        self._state = self.STATE_PLAYING
 
-    def _check_winner(self) -> None:
+    def return_to_menu(self) -> None:
+        self._round_num = 0
+        self._match_winner = None
+        self._winner = None
+        self._players_ctrl = PlayerController(2, self._events)
+        self._world.clear()
+        self._world.set_walls([])
+        self._map_data = None
+
+    # ================================================================= update
+    def update_play(self, dt: float, *, ignore_winner_check: bool = False) -> str | None:
+        for p in self._players_ctrl.players:
+            p.update(dt, self)
+
+        for s in self._world.shots[:]:
+            s.update(dt, self)
+            if not s.alive():
+                self._world.shots.remove(s)
+
+        self._collision.process(self._world, self._players_ctrl.players, self)
+
+        for m in self._world.mines[:]:
+            m.update(dt, self)
+            if not m.alive():
+                self._world.mines.remove(m)
+
+        for d in self._world.debris[:]:
+            d.update(dt, self)
+            if not d.alive():
+                self._world.debris.remove(d)
+
+        for w in self._world.shockwaves[:]:
+            w.update(dt, self)
+            if not w.alive():
+                self._world.shockwaves.remove(w)
+
+        for pt in self._world.particles[:]:
+            pt.update(dt, self)
+            if not pt.alive():
+                self._world.particles.remove(pt)
+
+        self._camera.update(dt)
+        self._powerup_ctrl.update(dt, self._players_ctrl.players, self)
+
+        if not ignore_winner_check and self._check_winner():
+            return "round_end"
+        return None
+
+    def _check_winner(self) -> bool:
         alive = self._players_ctrl.alive_players()
         if len(alive) <= 1 and len(self._players_ctrl.players) >= 2:
-            self._state = self.STATE_ROUND_END
-            self._round_end_timer = config.ROUND_END_DELAY_MS
             self._winner = alive[0] if alive else None
             if self._winner:
                 self._players_ctrl.award_winner(self._winner)
@@ -207,6 +234,25 @@ class GameController:
                     if score >= self._win_target:
                         self._match_winner = self._winner
             self._events.publish(GameEvent.ROUND_RESET, {"winner": self._winner})
+            return True
+        return False
+
+    # ================================================================== draw
+    def draw_play(self) -> None:
+        self._renderer.draw_play(
+            self._screen,
+            self._world,
+            self._camera,
+            self._powerup_ctrl,
+            self._players_ctrl,
+            self._map_data,
+            self._round_num,
+        )
+
+    # =============================================================== main loop
+    def _switch_state(self, key: str) -> None:
+        self._current_state = self._states[key]
+        self._current_state.on_enter()
 
     def run(self) -> None:
         running = True
@@ -215,235 +261,25 @@ class GameController:
             for ev in pg.event.get():
                 if ev.type == pg.QUIT:
                     running = False
-                elif ev.type == pg.KEYDOWN:
-                    if self._state == self.STATE_MENU:
-                        action = self._menu.handle_event(ev)
-                        if action:
-                            if action["action"] == "quit":
-                                running = False
-                            elif action["action"] == "start":
-                                self.begin_match(action["win_target"])
-                    elif self._state == self.STATE_PLAYING:
-                        if ev.key in (pg.K_p, pg.K_PAUSE):
-                            self._state = self.STATE_PAUSED
-                        elif ev.key == pg.K_ESCAPE:
-                            self._return_to_menu()
-                    elif self._state == self.STATE_PAUSED:
-                        if ev.key in (pg.K_p, pg.K_PAUSE, pg.K_ESCAPE, pg.K_RETURN):
-                            self._state = self.STATE_PLAYING
-                        elif ev.key == pg.K_q:
-                            self._return_to_menu()
-                    elif self._state == self.STATE_MATCH_OVER:
-                        if ev.key in (pg.K_RETURN, pg.K_SPACE, pg.K_ESCAPE):
-                            self._return_to_menu()
-                    elif self._state == self.STATE_ROUND_END:
-                        if ev.key == pg.K_ESCAPE:
-                            self._return_to_menu()
+                    break
+                transition = self._current_state.handle_event(ev)
+                if transition == "quit":
+                    running = False
+                    break
+                elif transition:
+                    self._switch_state(transition)
 
-            if self._state == self.STATE_MENU:
-                self._menu.update(dt)
-                self._menu.draw(self._screen, self._bg)
-            elif self._state == self.STATE_PLAYING:
-                self._update_play(dt)
-                self._draw_play()
-            elif self._state == self.STATE_PAUSED:
-                self._draw_play()
-                self._pause_pulse += dt * 0.004
-                self._draw_pause()
-            elif self._state == self.STATE_ROUND_END:
-                self._update_play(dt, ignore_winner_check=True)
-                self._round_end_timer -= dt
-                self._draw_play()
-                self._draw_round_end()
-                if self._round_end_timer <= 0:
-                    if self._match_winner is not None:
-                        self._state = self.STATE_MATCH_OVER
-                    else:
-                        self.start_round()
-            elif self._state == self.STATE_MATCH_OVER:
-                self._draw_play()
-                self._draw_match_over()
+            if not running:
+                break
 
+            transition = self._current_state.update(dt)
+            if transition == "quit":
+                running = False
+            elif transition:
+                self._switch_state(transition)
+
+            self._current_state.draw(self._screen)
             pg.display.flip()
 
         self._audio.stop_ambient()
         pg.quit()
-
-    def _return_to_menu(self) -> None:
-        self._state = self.STATE_MENU
-        self._round_num = 0
-        self._match_winner = None
-        self._winner = None
-        self._players_ctrl = PlayerController(2, self._events)
-        self._shots = []
-        self._mines = []
-        self._particles = []
-        self._debris = []
-        self._shockwaves = []
-        self._walls = []
-        self._map_data = None
-
-    # =========================================================== updates
-    def _update_play(self, dt: float, *, ignore_winner_check: bool = False) -> None:
-        for p in self._players_ctrl.players:
-            p.update(dt, self)
-
-        for s in self._shots[:]:
-            s.update(dt, self)
-            if not s.alive():
-                self._shots.remove(s)
-                continue
-            for player in self._players_ctrl.players:
-                if not player.alive():
-                    continue
-                # No friendly fire — your own bullets never hit you, even after bouncing.
-                if player is s.owner:
-                    continue
-                if s.rect.colliderect(player.rect):
-                    player.kill_player(self)
-                    s.kill()
-                    break
-            if not s.alive() and s in self._shots:
-                self._shots.remove(s)
-
-        for m in self._mines[:]:
-            m.update(dt, self)
-            if not m.alive():
-                self._mines.remove(m)
-
-        for d in self._debris[:]:
-            d.update(dt, self)
-            if not d.alive():
-                self._debris.remove(d)
-
-        for w in self._shockwaves[:]:
-            w.update(dt, self)
-            if not w.alive():
-                self._shockwaves.remove(w)
-
-        for pt in self._particles[:]:
-            pt.update(dt, self)
-            if not pt.alive():
-                self._particles.remove(pt)
-
-        if self._shake_timer > 0:
-            self._shake_timer = max(0, self._shake_timer - dt)
-        if self._flash_alpha > 0:
-            self._flash_alpha = max(0, int(self._flash_alpha - dt * 0.35))
-
-        self._powerup_ctrl.update(dt, self._players_ctrl.players, self)
-
-        if not ignore_winner_check:
-            self._check_winner()
-
-    # =========================================================== drawing
-    def _draw_play(self) -> None:
-        world = self._world
-        world.blit(self._bg, (0, 0))
-
-        for w in self._walls:
-            w.draw(world)
-        self._powerup_ctrl.draw(world)
-        for m in self._mines:
-            m.draw(world)
-        for pt in self._particles:
-            pt.draw(world)
-        for d in self._debris:
-            d.draw(world)
-        for p in self._players_ctrl.players:
-            p.draw(world)
-        for s in self._shots:
-            s.draw(world)
-        for sw in self._shockwaves:
-            sw.draw(world)
-
-        shake_x = shake_y = 0
-        if self._shake_timer > 0 and self._shake_duration > 0:
-            t = self._shake_timer / self._shake_duration
-            amp = self._shake_intensity * t
-            shake_x = int(random.uniform(-amp, amp))
-            shake_y = int(random.uniform(-amp, amp))
-        self._screen.fill((0, 0, 0))
-        self._screen.blit(world, (shake_x, shake_y))
-
-        if self._flash_alpha > 0 and self._flash_color is not None:
-            overlay = pg.Surface((config.WIDTH, config.HEIGHT), pg.SRCALPHA)
-            overlay.fill((*self._flash_color, self._flash_alpha))
-            self._screen.blit(overlay, (0, 0))
-
-        self._players_ctrl.draw_hud(self._screen)
-
-        if self._map_data:
-            info = self._tiny_font.render(
-                f"{self._map_data['name']}  ·  Round {self._round_num}",
-                True, (150, 165, 190),
-            )
-            pad = 10
-            box = pg.Rect(
-                config.WIDTH - info.get_width() - pad * 2 - 16,
-                config.HUD_HEIGHT + 8,
-                info.get_width() + pad * 2,
-                info.get_height() + pad,
-            )
-            bg = pg.Surface((box.width, box.height), pg.SRCALPHA)
-            pg.draw.rect(bg, (20, 24, 36, 200), bg.get_rect(), border_radius=6)
-            self._screen.blit(bg, box.topleft)
-            self._screen.blit(info, (box.left + pad, box.top + pad // 2))
-
-    def _draw_pause(self) -> None:
-        overlay = pg.Surface((config.WIDTH, config.HEIGHT), pg.SRCALPHA)
-        overlay.fill((0, 0, 0, 150))
-        self._screen.blit(overlay, (0, 0))
-
-        pulse = (math.sin(self._pause_pulse * 4) + 1) / 2
-        title = self._title_font.render("PAUSED", True, (235, 240, 250))
-        self._screen.blit(title, title.get_rect(center=(config.WIDTH // 2, config.HEIGHT // 2 - 60)))
-
-        col = (int(140 + 80 * pulse), 210, 255)
-        hint = self._sub_font.render("P / ESC : resume    ·    Q : quit to menu", True, col)
-        self._screen.blit(hint, hint.get_rect(center=(config.WIDTH // 2, config.HEIGHT // 2 + 40)))
-
-    def _draw_round_end(self) -> None:
-        overlay = pg.Surface((config.WIDTH, config.HEIGHT), pg.SRCALPHA)
-        overlay.fill((0, 0, 0, 110))
-        self._screen.blit(overlay, (0, 0))
-        if self._winner:
-            text = f"{self._winner.name} WINS THE ROUND"
-            color = self._winner.colors["accent"]
-        else:
-            text = "DRAW"
-            color = (220, 220, 230)
-        surf = self._sub_font.render(text, True, color)
-        rect = surf.get_rect(center=(config.WIDTH // 2, config.HEIGHT // 2))
-        panel = pg.Surface((rect.width + 60, rect.height + 30), pg.SRCALPHA)
-        pg.draw.rect(panel, (15, 18, 28, 220), panel.get_rect(), border_radius=10)
-        pg.draw.rect(panel, (*color, 180), panel.get_rect(), border_radius=10, width=2)
-        self._screen.blit(panel, panel.get_rect(center=rect.center).topleft)
-        self._screen.blit(surf, rect)
-
-    def _draw_match_over(self) -> None:
-        overlay = pg.Surface((config.WIDTH, config.HEIGHT), pg.SRCALPHA)
-        overlay.fill((0, 0, 0, 170))
-        self._screen.blit(overlay, (0, 0))
-
-        winner = self._match_winner
-        if winner:
-            text = f"{winner.name} WINS THE MATCH"
-            color = winner.colors["accent"]
-        else:
-            text = "MATCH OVER"
-            color = (220, 220, 230)
-        surf = self._title_font.render(text, True, color)
-        rect = surf.get_rect(center=(config.WIDTH // 2, config.HEIGHT // 2 - 30))
-        self._screen.blit(surf, rect)
-
-        y = rect.bottom + 30
-        for p in self._players_ctrl.players:
-            s = self._sub_font.render(
-                f"{p.name}: {self._players_ctrl.scores.get(p, 0)}", True, p.colors["accent"]
-            )
-            self._screen.blit(s, s.get_rect(center=(config.WIDTH // 2, y)))
-            y += 36
-
-        hint = self._tiny_font.render("Press ENTER or ESC to return to menu", True, (180, 190, 210))
-        self._screen.blit(hint, hint.get_rect(center=(config.WIDTH // 2, config.HEIGHT - 60)))
