@@ -126,7 +126,10 @@ class Player(Entity):
         if not self._alive:
             return
 
-        # expire effects
+        # Run per-frame effect behaviours (e.g. Banana dropping peels).
+        for e in self._effects:
+            e.on_tick(self, ctx, dt)
+        # Then expire effects whose duration has run out.
         self._effects = [e for e in self._effects if not e.tick_effect(dt)]
         self._fire_flash = max(0, self._fire_flash - dt)
 

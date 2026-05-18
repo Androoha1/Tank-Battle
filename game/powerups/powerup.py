@@ -135,3 +135,10 @@ class PowerUp(Entity, ABC):
     def modify_max_bounces(self, base: int) -> int:
         """Effective bullet bounce count (Pinball)."""
         return base
+
+    def on_tick(self, player, ctx, dt: float) -> None:
+        """Called once per frame while the effect is active on the player.
+
+        Default no-op. Override for active behaviours like trail-dropping.
+        """
+        pass

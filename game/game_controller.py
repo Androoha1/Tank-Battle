@@ -10,6 +10,7 @@ from .audio import SoundLibrary
 from .controllers.layout_controller import LayoutController
 from .controllers.player_controller import PlayerController
 from .controllers.powerup_controller import PowerupController
+from .entities.cow_drop import CowDrop
 from .entities.particle import Particle
 from .events import GameEvent, GameEventObservable
 from .menu import Menu
@@ -51,6 +52,9 @@ class GameController:
         self._particles: list = []
         self._debris: list = []
         self._shockwaves: list = []
+        self._banana_peels: list = []
+        self._cows: list = []
+        self._cow_timer: float = 7000.0  # first cow ~7s into a round
         self._walls: list = []
         self._map_data: dict | None = None
         self._state = self.STATE_MENU
@@ -102,11 +106,24 @@ class GameController:
     def add_shockwave(self, w) -> None:
         self._shockwaves.append(w)
 
+    def add_banana(self, peel) -> None:
+        self._banana_peels.append(peel)
+
     def random_spawn_point(self) -> tuple[float, float, float] | None:
         """Return a random (x, y, angle) spawn for the current map, or None."""
         if self._map_data is None:
             return None
         return random.choice(self._map_data["spawns"])
+
+    def _spawn_cow(self) -> None:
+        """Pick an open spot on the playfield and queue a cow drop there."""
+        for _ in range(30):
+            x = random.uniform(80, config.WIDTH - 80)
+            y = random.uniform(config.HUD_HEIGHT + 80, config.HEIGHT - 80)
+            if any(w.rect.collidepoint(x, y) for w in self._walls):
+                continue
+            self._cows.append(CowDrop(x, y))
+            return
 
     def request_shake(self, intensity: float, duration_ms: float) -> None:
         if intensity > self._shake_intensity or self._shake_timer <= 0:
@@ -179,6 +196,9 @@ class GameController:
         self._particles = []
         self._debris = []
         self._shockwaves = []
+        self._banana_peels = []
+        self._cows = []
+        self._cow_timer = 7000.0
         self._shake_intensity = 0
         self._shake_timer = 0
         self._flash_alpha = 0
@@ -311,6 +331,21 @@ class GameController:
             if not m.alive():
                 self._mines.remove(m)
 
+        for bp in self._banana_peels[:]:
+            bp.update(dt, self)
+            if not bp.alive():
+                self._banana_peels.remove(bp)
+
+        # Cow drop hazard: tick timer, spawn a new one periodically.
+        self._cow_timer -= dt
+        if self._cow_timer <= 0 and self._map_data is not None:
+            self._spawn_cow()
+            self._cow_timer = random.uniform(16000, 24000)
+        for cow in self._cows[:]:
+            cow.update(dt, self)
+            if not cow.alive():
+                self._cows.remove(cow)
+
         for d in self._debris[:]:
             d.update(dt, self)
             if not d.alive():
@@ -344,6 +379,8 @@ class GameController:
         for w in self._walls:
             w.draw(world)
         self._powerup_ctrl.draw(world)
+        for bp in self._banana_peels:
+            bp.draw(world)
         for m in self._mines:
             m.draw(world)
         for pt in self._particles:
@@ -354,6 +391,8 @@ class GameController:
             p.draw(world)
         for s in self._shots:
             s.draw(world)
+        for cow in self._cows:
+            cow.draw(world)
         for sw in self._shockwaves:
             sw.draw(world)
 

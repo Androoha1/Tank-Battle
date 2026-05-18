@@ -5,6 +5,7 @@ import pygame as pg
 from ..events import GameEvent
 from ..powerups.arrow_shot import ArrowShot
 from ..powerups.backshot import Backshot
+from ..powerups.banana import Banana
 from ..powerups.big_shot import BigShot
 from ..powerups.drunk import Drunk
 from ..powerups.fire_rate import FireRate
@@ -29,6 +30,7 @@ class PowerupController:
         Shield, BigShot, MinePower, Freeze,
         Tiny, Ghost, Teleport, Drunk,
         Giant, Spinner, Backshot, Pinball, Shotgun,
+        Banana,
     ]
 
     def __init__(self, events) -> None:
