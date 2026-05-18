@@ -32,4 +32,22 @@ class RoundEndState(GameState):
 
     def draw(self, screen: pg.Surface) -> None:
         self._gc.draw_play()
-        self._renderer.draw_round_end(screen, self._gc.winner)
+
+        overlay = pg.Surface((config.WIDTH, config.HEIGHT), pg.SRCALPHA)
+        overlay.fill((0, 0, 0, 110))
+        screen.blit(overlay, (0, 0))
+
+        winner = self._gc.winner
+        if winner:
+            text = f"{winner.name} WINS THE ROUND"
+            color = winner.colors["accent"]
+        else:
+            text = "DRAW"
+            color = (220, 220, 230)
+        surf = self._renderer.sub_font.render(text, True, color)
+        rect = surf.get_rect(center=(config.WIDTH // 2, config.HEIGHT // 2))
+        panel = pg.Surface((rect.width + 60, rect.height + 30), pg.SRCALPHA)
+        pg.draw.rect(panel, (15, 18, 28, 220), panel.get_rect(), border_radius=10)
+        pg.draw.rect(panel, (*color, 180), panel.get_rect(), border_radius=10, width=2)
+        screen.blit(panel, panel.get_rect(center=rect.center).topleft)
+        screen.blit(surf, rect)

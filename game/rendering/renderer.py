@@ -1,5 +1,4 @@
-"""Renderer: background surface, world composite, and per-state overlays."""
-import math
+"""Renderer: background surface and world composite."""
 import pygame as pg
 
 from .. import config
@@ -9,8 +8,8 @@ class Renderer:
     """Owns the off-screen world buffer, the background tile, and all fonts.
 
     State classes call :meth:`draw_play` to composite the game world, then
-    call one of the overlay methods (draw_pause / draw_round_end /
-    draw_match_over) for their own state-specific chrome.
+    draw their own state-specific overlays using the font properties exposed
+    here.
     """
 
     def __init__(self) -> None:
@@ -25,6 +24,22 @@ class Renderer:
     @property
     def background(self) -> pg.Surface:
         return self._bg
+
+    @property
+    def title_font(self) -> pg.font.Font:
+        return self._title_font
+
+    @property
+    def sub_font(self) -> pg.font.Font:
+        return self._sub_font
+
+    @property
+    def mid_font(self) -> pg.font.Font:
+        return self._mid_font
+
+    @property
+    def tiny_font(self) -> pg.font.Font:
+        return self._tiny_font
 
     # ---------------------------------------------------------------- setup
     def _build_background(self) -> pg.Surface:
@@ -115,66 +130,3 @@ class Renderer:
             pg.draw.rect(bg, (20, 24, 36, 200), bg.get_rect(), border_radius=6)
             screen.blit(bg, box.topleft)
             screen.blit(info, (box.left + pad, box.top + pad // 2))
-
-    # ---------------------------------------------------------------- overlays
-    def draw_pause(self, screen: pg.Surface, pulse: float) -> None:
-        overlay = pg.Surface((config.WIDTH, config.HEIGHT), pg.SRCALPHA)
-        overlay.fill((0, 0, 0, 150))
-        screen.blit(overlay, (0, 0))
-
-        anim = (math.sin(pulse * 4) + 1) / 2
-        title = self._title_font.render("PAUSED", True, (235, 240, 250))
-        screen.blit(title, title.get_rect(center=(config.WIDTH // 2, config.HEIGHT // 2 - 60)))
-
-        col = (int(140 + 80 * anim), 210, 255)
-        hint = self._sub_font.render(
-            "P / ESC : resume    ·    Q : quit to menu", True, col
-        )
-        screen.blit(hint, hint.get_rect(center=(config.WIDTH // 2, config.HEIGHT // 2 + 40)))
-
-    def draw_round_end(self, screen: pg.Surface, winner) -> None:
-        overlay = pg.Surface((config.WIDTH, config.HEIGHT), pg.SRCALPHA)
-        overlay.fill((0, 0, 0, 110))
-        screen.blit(overlay, (0, 0))
-
-        if winner:
-            text = f"{winner.name} WINS THE ROUND"
-            color = winner.colors["accent"]
-        else:
-            text = "DRAW"
-            color = (220, 220, 230)
-        surf = self._sub_font.render(text, True, color)
-        rect = surf.get_rect(center=(config.WIDTH // 2, config.HEIGHT // 2))
-        panel = pg.Surface((rect.width + 60, rect.height + 30), pg.SRCALPHA)
-        pg.draw.rect(panel, (15, 18, 28, 220), panel.get_rect(), border_radius=10)
-        pg.draw.rect(panel, (*color, 180), panel.get_rect(), border_radius=10, width=2)
-        screen.blit(panel, panel.get_rect(center=rect.center).topleft)
-        screen.blit(surf, rect)
-
-    def draw_match_over(self, screen: pg.Surface, match_winner, players_ctrl) -> None:
-        overlay = pg.Surface((config.WIDTH, config.HEIGHT), pg.SRCALPHA)
-        overlay.fill((0, 0, 0, 170))
-        screen.blit(overlay, (0, 0))
-
-        if match_winner:
-            text = f"{match_winner.name} WINS THE MATCH"
-            color = match_winner.colors["accent"]
-        else:
-            text = "MATCH OVER"
-            color = (220, 220, 230)
-        surf = self._title_font.render(text, True, color)
-        rect = surf.get_rect(center=(config.WIDTH // 2, config.HEIGHT // 2 - 30))
-        screen.blit(surf, rect)
-
-        y = rect.bottom + 30
-        for p in players_ctrl.players:
-            s = self._sub_font.render(
-                f"{p.name}: {players_ctrl.scores.get(p, 0)}", True, p.colors["accent"]
-            )
-            screen.blit(s, s.get_rect(center=(config.WIDTH // 2, y)))
-            y += 36
-
-        hint = self._tiny_font.render(
-            "Press ENTER or ESC to return to menu", True, (180, 190, 210)
-        )
-        screen.blit(hint, hint.get_rect(center=(config.WIDTH // 2, config.HEIGHT - 60)))
