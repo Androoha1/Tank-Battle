@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Virtual environment
+.venv/
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+
+# Claude Code
+.claude/
+
+# OS / temp files
+~$*
+Thumbs.db
+.DS_Store
