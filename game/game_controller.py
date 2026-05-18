@@ -1,7 +1,26 @@
 """Top-level coordinator: owns entity collections and drives the main loop."""
 import math
 import random
+import socket
 import pygame as pg
+
+
+def _detect_lan_ip() -> str:
+    """Return this machine's LAN-facing IP, or 127.0.0.1 if offline.
+
+    ``gethostbyname(gethostname())`` returns the loopback on macOS when the
+    hostname resolves locally. Opening a UDP "connection" to a public address
+    (no packets actually sent) lets the OS pick the right interface and we
+    can read its address back via ``getsockname``.
+    """
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(("8.8.8.8", 80))
+        return s.getsockname()[0]
+    except OSError:
+        return "127.0.0.1"
+    finally:
+        s.close()
 
 from .audio import SoundLibrary
 from .controllers.layout_controller import LayoutController
@@ -617,11 +636,7 @@ class GameController:
         title = self._title_font.render("HOSTING", True, (235, 240, 250))
         self._screen.blit(title, title.get_rect(center=(config.WIDTH // 2, 180)))
 
-        import socket as _s
-        try:
-            host_ip = _s.gethostbyname(_s.gethostname())
-        except OSError:
-            host_ip = "?"
+        host_ip = _detect_lan_ip()
         info1 = self._sub_font.render(f"Share this address with players:", True, (180, 195, 220))
         info2 = self._title_font.render(f"{host_ip}", True, (140, 220, 255))
         info3 = self._sub_font.render(f"Port: {self._lobby_port}", True, (180, 195, 220))
