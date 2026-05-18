@@ -123,3 +123,15 @@ class PowerUp(Entity, ABC):
     def modify_alpha(self, base: int) -> int:
         """Effective draw alpha for the tank sprite."""
         return base
+
+    def rotation_per_tick(self) -> float:
+        """Auto-rotation in degrees/frame applied each tick (Spinner)."""
+        return 0.0
+
+    def shoot_angle_offset(self) -> float:
+        """Static angle added to the player's facing when firing (Backshot)."""
+        return 0.0
+
+    def modify_max_bounces(self, base: int) -> int:
+        """Effective bullet bounce count (Pinball)."""
+        return base

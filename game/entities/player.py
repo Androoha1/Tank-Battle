@@ -146,6 +146,11 @@ class Player(Entity):
         if right:
             self._angle = (self._angle - config.TANK_ROT_SPEED) % 360
 
+        # Spinner: forced auto-rotation on top of input.
+        auto_rot = sum(e.rotation_per_tick() for e in self._effects)
+        if auto_rot != 0:
+            self._angle = (self._angle + auto_rot) % 360
+
         speed = self._eff_speed()
         move = 0.0
         if up:
@@ -215,20 +220,30 @@ class Player(Entity):
             return
 
         pattern = self._active_pattern()
-        rad = math.radians(self._angle)
+        # Effective firing angle includes any global offset (e.g. Backshot = 180).
+        angle_offset = sum(e.shoot_angle_offset() for e in self._effects)
+        effective_angle = self._angle + angle_offset
+        rad = math.radians(effective_angle)
         bx = self._x + math.cos(rad) * (self._size * 0.6)
         by = self._y - math.sin(rad) * (self._size * 0.6)
         color = self._colors["accent"]
 
+        # Effective bounce count (Pinball adds to it).
+        bounces = config.SHOT_MAX_BOUNCES
+        for e in self._effects:
+            bounces = e.modify_max_bounces(bounces)
+
         for offset in pattern:
-            shot_angle = self._angle + offset
+            shot_angle = effective_angle + offset
             if kind == "big":
                 ctx.add_shot(Shot(
                     bx, by, shot_angle, self, color,
                     radius=12, speed=4.0, max_bounces=1,
                 ))
             else:
-                ctx.add_shot(Shot(bx, by, shot_angle, self, color))
+                ctx.add_shot(Shot(
+                    bx, by, shot_angle, self, color, max_bounces=bounces,
+                ))
 
         for _ in range(4):
             jitter = random.uniform(-8, 8)
