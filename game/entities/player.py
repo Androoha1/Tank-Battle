@@ -34,12 +34,14 @@ class Player(Entity):
         self._size = config.TANK_SIZE
         self._base_speed = config.TANK_SPEED
         self._base_cooldown = config.SHOT_COOLDOWN_MS
-        self._cooldown = 0.0
+        # Brief no-fire window on spawn so a still-held confirm key (e.g.
+        # ENTER from the menu, which is also P2's shoot key) doesn't trigger
+        # an immediate shot.
+        self._cooldown = 700.0
         self._effects: list = []
         self._tread_offset = 0.0
         self._tread_phase = 0
         self._fire_flash = 0  # ms remaining
-        self._remote_input: dict | None = None  # if set, used instead of keyboard
 
     # --- public read-only state -------------------------------------------
     @property
@@ -56,7 +58,7 @@ class Player(Entity):
 
     @property
     def rect(self) -> pg.Rect:
-        s = self._size - 2
+        s = self._eff_size() - 2
         return pg.Rect(int(self._x - s / 2), int(self._y - s / 2), s, s)
 
     @property
@@ -68,22 +70,6 @@ class Player(Entity):
         """Add an effect, replacing any other instance of the same class."""
         self._effects = [e for e in self._effects if type(e) is not type(effect)]
         self._effects.append(effect)
-
-    def set_remote_input(self, state: dict | None) -> None:
-        """Override keyboard input with a state dict (used by networking)."""
-        self._remote_input = state
-
-    def read_input_dict(self) -> dict:
-        """Read the local controls into a dict (used by client to send to server)."""
-        keys = pg.key.get_pressed()
-        c = self._controls
-        return {
-            "left": bool(keys[c["left"]]),
-            "right": bool(keys[c["right"]]),
-            "up": bool(keys[c["up"]]),
-            "down": bool(keys[c["down"]]),
-            "shoot": bool(keys[c["shoot"]]),
-        }
 
     def _eff_speed(self) -> float:
         s = self._base_speed
@@ -111,6 +97,30 @@ class Player(Entity):
                 return kind
         return "normal"
 
+    def _eff_size(self) -> int:
+        s = self._size
+        for e in self._effects:
+            s = e.modify_size(s)
+        return s
+
+    def _eff_alpha(self) -> int:
+        a = 255
+        for e in self._effects:
+            a = e.modify_alpha(a)
+        return max(0, min(255, a))
+
+    def _phases_walls(self) -> bool:
+        return any(getattr(e, "phases_walls", False) for e in self._effects)
+
+    def _swaps_steering(self) -> bool:
+        return any(getattr(e, "swaps_steering", False) for e in self._effects)
+
+    def teleport_to(self, x: float, y: float, angle_deg: float) -> None:
+        """Used by the Teleport powerup."""
+        self._x = float(x)
+        self._y = float(y)
+        self._angle = float(angle_deg)
+
     # --- update -----------------------------------------------------------
     def update(self, dt: float, ctx) -> None:
         if not self._alive:
@@ -120,21 +130,16 @@ class Player(Entity):
         self._effects = [e for e in self._effects if not e.tick_effect(dt)]
         self._fire_flash = max(0, self._fire_flash - dt)
 
-        if self._remote_input is not None:
-            r = self._remote_input
-            left = bool(r.get("left"))
-            right = bool(r.get("right"))
-            up = bool(r.get("up"))
-            down = bool(r.get("down"))
-            shoot = bool(r.get("shoot"))
-        else:
-            keys = pg.key.get_pressed()
-            c = self._controls
-            left = keys[c["left"]]
-            right = keys[c["right"]]
-            up = keys[c["up"]]
-            down = keys[c["down"]]
-            shoot = keys[c["shoot"]]
+        keys = pg.key.get_pressed()
+        c = self._controls
+        left = keys[c["left"]]
+        right = keys[c["right"]]
+        up = keys[c["up"]]
+        down = keys[c["down"]]
+        shoot = keys[c["shoot"]]
+
+        if self._swaps_steering():
+            left, right = right, left
 
         if left:
             self._angle = (self._angle + config.TANK_ROT_SPEED) % 360
@@ -161,30 +166,34 @@ class Player(Entity):
             self._fire_flash = 90
 
     def _try_move(self, dx: float, dy: float, walls) -> None:
-        s = self._size - 2
+        s = self._eff_size() - 2
+        phasing = self._phases_walls()
         self._x += dx
-        rect = pg.Rect(int(self._x - s / 2), int(self._y - s / 2), s, s)
-        for w in walls:
-            if rect.colliderect(w.rect):
-                if dx > 0:
-                    self._x = w.rect.left - s / 2
-                elif dx < 0:
-                    self._x = w.rect.right + s / 2
-                rect = pg.Rect(int(self._x - s / 2), int(self._y - s / 2), s, s)
+        if not phasing:
+            rect = pg.Rect(int(self._x - s / 2), int(self._y - s / 2), s, s)
+            for w in walls:
+                if rect.colliderect(w.rect):
+                    if dx > 0:
+                        self._x = w.rect.left - s / 2
+                    elif dx < 0:
+                        self._x = w.rect.right + s / 2
+                    rect = pg.Rect(int(self._x - s / 2), int(self._y - s / 2), s, s)
+        # Screen bounds always apply, even in ghost mode.
         if self._x - s / 2 < 0:
             self._x = s / 2
         elif self._x + s / 2 > config.WIDTH:
             self._x = config.WIDTH - s / 2
 
         self._y += dy
-        rect = pg.Rect(int(self._x - s / 2), int(self._y - s / 2), s, s)
-        for w in walls:
-            if rect.colliderect(w.rect):
-                if dy > 0:
-                    self._y = w.rect.top - s / 2
-                elif dy < 0:
-                    self._y = w.rect.bottom + s / 2
-                rect = pg.Rect(int(self._x - s / 2), int(self._y - s / 2), s, s)
+        if not phasing:
+            rect = pg.Rect(int(self._x - s / 2), int(self._y - s / 2), s, s)
+            for w in walls:
+                if rect.colliderect(w.rect):
+                    if dy > 0:
+                        self._y = w.rect.top - s / 2
+                    elif dy < 0:
+                        self._y = w.rect.bottom + s / 2
+                    rect = pg.Rect(int(self._x - s / 2), int(self._y - s / 2), s, s)
         if self._y - s / 2 < config.HUD_HEIGHT:
             self._y = config.HUD_HEIGHT + s / 2
         elif self._y + s / 2 > config.HEIGHT:
@@ -292,7 +301,9 @@ class Player(Entity):
         self._angle = angle_deg
         self._alive = True
         self._effects = []
-        self._cooldown = 0.0
+        # Match the spawn-time no-fire window so a held shoot key during the
+        # round-end pause doesn't immediately fire on the new round.
+        self._cooldown = 700.0
         self._fire_flash = 0
 
     # --- drawing ----------------------------------------------------------
@@ -375,6 +386,19 @@ class Player(Entity):
 
         img = self._build_image()
         rotated = pg.transform.rotate(img, self._angle - 90)
+        # Tiny powerup: scale the rotated sprite down to the effective size.
+        eff_size = self._eff_size()
+        if eff_size != self._size and self._size > 0:
+            scale = eff_size / self._size
+            rotated = pg.transform.smoothscale(
+                rotated,
+                (max(1, int(rotated.get_width() * scale)),
+                 max(1, int(rotated.get_height() * scale))),
+            )
+        # Ghost powerup: lower alpha for transparency.
+        alpha = self._eff_alpha()
+        if alpha < 255:
+            rotated.set_alpha(alpha)
         surface.blit(rotated, rotated.get_rect(center=(int(self._x), int(self._y))).topleft)
 
         # muzzle flash

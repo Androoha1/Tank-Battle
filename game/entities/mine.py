@@ -60,9 +60,11 @@ class Mine(Entity):
         self._exploded = True
         self.kill()
 
-        # Kill anyone in radius (including owner — proper mine etiquette).
+        # No friendly fire — owner is immune to their own mine.
         for p in ctx.players:
             if not p.alive():
+                continue
+            if p is self._owner:
                 continue
             dx = p.x - self._x
             dy = p.y - self._y

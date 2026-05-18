@@ -110,6 +110,93 @@ class LayoutController:
             ],
         })
 
+        # 5. Bunkers — L-shaped corner cover + a small centre block.
+        maps.append({
+            "name": "Bunkers",
+            "walls": [
+                # top-left L
+                (90, TOP + 90, 200, T),
+                (90, TOP + 90, T, 110),
+                # top-right L
+                (W - 290, TOP + 90, 200, T),
+                (W - 90 - T, TOP + 90, T, 110),
+                # bottom-left L
+                (90, H - 90 - T, 200, T),
+                (90, H - 200, T, 110),
+                # bottom-right L
+                (W - 290, H - 90 - T, 200, T),
+                (W - 90 - T, H - 200, T, 110),
+                # centre cross
+                (cx - 50, cy - T // 2, 100, T),
+                (cx - T // 2, cy - 50, T, 100),
+            ],
+            "spawns": [
+                (60, TOP + 60, 0),
+                (W - 60, H - 60, 180),
+                (W - 60, TOP + 60, 270),
+                (60, H - 60, 90),
+            ],
+            "powerup_spots": [
+                (cx, cy),
+                (cx, TOP + 80),
+                (cx, H - 60),
+                (60, cy),
+                (W - 60, cy),
+            ],
+        })
+
+        # 6. Channels — alternating long horizontal walls (zig-zag corridors).
+        ch_t = T
+        maps.append({
+            "name": "Channels",
+            "walls": [
+                (140, TOP + 130, int(W * 0.55), ch_t),
+                (int(W * 0.30), TOP + 280, int(W * 0.55), ch_t),
+                (140, cy + 30, int(W * 0.55), ch_t),
+                (int(W * 0.30), H - 200, int(W * 0.55), ch_t),
+                (140, H - 90, int(W * 0.55), ch_t),
+            ],
+            "spawns": [
+                (70, TOP + 70, 0),
+                (W - 70, H - 70, 180),
+                (W - 70, TOP + 70, 0),
+                (70, H - 70, 180),
+            ],
+            "powerup_spots": [
+                (cx, TOP + 200),
+                (cx, cy),
+                (cx, H - 160),
+                (60, cy),
+                (W - 60, cy),
+            ],
+        })
+
+        # 7. Arena — wide-open arena with four small pillars.
+        maps.append({
+            "name": "Arena",
+            "walls": [
+                (int(W * 0.30) - 30, cy - 30, 60, 60),
+                (int(W * 0.70) - 30, cy - 30, 60, 60),
+                (cx - 30, TOP + 170, 60, 60),
+                (cx - 30, H - 230, 60, 60),
+            ],
+            "spawns": [
+                (90, TOP + 90, 0),
+                (W - 90, H - 90, 180),
+                (W - 90, TOP + 90, 270),
+                (90, H - 90, 90),
+            ],
+            "powerup_spots": [
+                (cx, cy),
+                (cx, TOP + 80),
+                (cx, H - 60),
+                (140, cy),
+                (W - 140, cy),
+                (int(W * 0.30), cy - 130),
+                (int(W * 0.70), cy + 130),
+            ],
+        })
+
         # 4. Coliseum — central fortress with door gaps.
         maps.append({
             "name": "Coliseum",

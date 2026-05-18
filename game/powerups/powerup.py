@@ -111,3 +111,15 @@ class PowerUp(Entity, ABC):
     def try_consume_hit(self) -> bool:
         """If this effect absorbs hits, consume one charge and return True."""
         return False
+
+    # ---- fun modifiers (default: no-op) ----
+    swaps_steering: bool = False  # Drunk
+    phases_walls: bool = False    # Ghost
+
+    def modify_size(self, base: int) -> int:
+        """Effective tank size (used for hitbox + drawing)."""
+        return base
+
+    def modify_alpha(self, base: int) -> int:
+        """Effective draw alpha for the tank sprite."""
+        return base
