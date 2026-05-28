@@ -8,6 +8,7 @@ from .. import config
 
 class PowerUpPickup(Entity):
     _font_cache: pg.font.Font | None = None
+    _label_font_cache: pg.font.Font | None = None
 
     def __init__(self, x: float, y: float, effect_class) -> None:
         super().__init__(x, y)
@@ -35,7 +36,10 @@ class PowerUpPickup(Entity):
     def draw(self, surface: pg.Surface) -> None:
         if PowerUpPickup._font_cache is None:
             PowerUpPickup._font_cache = pg.font.SysFont("arialblack", 18, bold=True)
+        if PowerUpPickup._label_font_cache is None:
+            PowerUpPickup._label_font_cache = pg.font.SysFont("arial", 12, bold=True)
         font = PowerUpPickup._font_cache
+        label_font = PowerUpPickup._label_font_cache
         ec = self._effect_class
 
         cx = int(self._x)
@@ -56,3 +60,10 @@ class PowerUpPickup(Entity):
         # icon
         icon = font.render(ec.ICON, True, (250, 250, 250))
         surface.blit(icon, icon.get_rect(center=(cx, cy)))
+
+        # label
+        label_y = cy + self._radius + 8
+        shadow = label_font.render(ec.NAME, True, (0, 0, 0))
+        text = label_font.render(ec.NAME, True, (255, 255, 255))
+        surface.blit(shadow, shadow.get_rect(center=(cx + 1, label_y + 1)))
+        surface.blit(text, text.get_rect(center=(cx, label_y)))
