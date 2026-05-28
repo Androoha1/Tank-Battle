@@ -21,8 +21,8 @@ class CollisionSystem:
             for player in players:
                 if not player.alive():
                     continue
-                # No friendly fire — owner's bullets never hit them.
-                if player is s.owner:
+                # Owner can only be hit after the grace period expires.
+                if player is s.owner and not s.can_hit_owner:
                     continue
                 if s.rect.colliderect(player.rect):
                     player.kill_player(ctx)
